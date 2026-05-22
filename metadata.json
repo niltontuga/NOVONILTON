@@ -1,0 +1,6 @@
+{
+  "name": "Nilton Nascimento Playlists",
+  "description": "Plataforma para acompanhamento de playlists de Podcast e MicroAprendizagem de Nilton Nascimento, com controle de progresso e player de vídeo adaptativo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
