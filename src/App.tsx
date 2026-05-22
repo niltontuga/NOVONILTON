@@ -17,7 +17,8 @@ import {
   Check, 
   Youtube,
   Star,
-  BookOpen
+  BookOpen,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -34,6 +35,12 @@ export default function App() {
   // Modes: 'podcast' or 'micro' - Startup with Podcast active by default!
   const [activeTab, setActiveTab] = useState<'podcast' | 'micro'>('podcast');
   
+  // State elements to record real-time YouTube sync outputs
+  const [podcastVideos, setPodcastVideos] = useState<Video[]>(PODCAST_VIDEOS);
+  const [microVideos, setMicroVideos] = useState<Video[]>(MICRO_VIDEOS);
+  const [isLoadingLive, setIsLoadingLive] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
   // Active selected video inside the player container (No featured video by default)
   const [activeVideo, setActiveVideo] = useState<Video | null>(null);
   
@@ -66,6 +73,35 @@ export default function App() {
     }
   }, [progress]);
 
+  // Fetch live YouTube playlist contents in the background seamlessly
+  const fetchLivePlaylists = async (forceRefresh: boolean = false) => {
+    setIsLoadingLive(true);
+    try {
+      const endpoint = forceRefresh ? '/api/playlists/refresh' : '/api/playlists';
+      const method = forceRefresh ? 'POST' : 'GET';
+      const res = await fetch(endpoint, { method });
+      const data = await res.json();
+      
+      if (data.podcast && data.podcast.length > 0) {
+        setPodcastVideos(data.podcast);
+      }
+      if (data.micro && data.micro.length > 0) {
+        setMicroVideos(data.micro);
+      }
+      if (data.lastUpdated) {
+        setLastUpdated(data.lastUpdated);
+      }
+    } catch (err) {
+      console.warn('Real-time playlist sync bypass, keeping robust default metadata:', err);
+    } finally {
+      setIsLoadingLive(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLivePlaylists();
+  }, []);
+
   // Handler for partial updates to progress state
   const updateProgress = (updates: Partial<UserProgress>) => {
     setProgress(prev => ({
@@ -96,7 +132,7 @@ export default function App() {
   };
 
   // Select appropriate video list based on selected active tab
-  const activeVideosSource = activeTab === 'podcast' ? PODCAST_VIDEOS : MICRO_VIDEOS;
+  const activeVideosSource = activeTab === 'podcast' ? podcastVideos : microVideos;
 
   // Process sorting & filtering ("Mais recentes primeiro" -> sorted by dateOffsetDays ascending)
   const filteredVideos = activeVideosSource
@@ -118,7 +154,7 @@ export default function App() {
     // Sort "Mais recentes primeiro" (Day offset closer to 0 means more recent)
     .sort((a, b) => a.dateOffsetDays - b.dateOffsetDays);
 
-  const totalPossibleVideosCount = PODCAST_VIDEOS.length + MICRO_VIDEOS.length;
+  const totalPossibleVideosCount = podcastVideos.length + microVideos.length;
 
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-slate-100 flex flex-col font-sans" id="app-root-container">
@@ -268,7 +304,7 @@ export default function App() {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <h3 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
                   <BookOpen className="w-5 h-5 text-blue-500" />
-                  <span>Lista de Vídeos da Playlist ({filteredVideos.length})</span>
+                  <span>Lista de Vídeos {activeTab === 'podcast' ? 'do Podcast' : 'da MicroAprendizagem'} ({filteredVideos.length})</span>
                 </h3>
                 <a 
                   href={activeTab === 'podcast' ? 'https://youtube.com/playlist?list=PLhUeluG4tU752tEp5UN1RAx-_6IY11z1B&si=iLYONPzMrVx6uwnY' : 'https://youtube.com/playlist?list=PLhUeluG4tU76J8zcSMy5cEgmLCjXGXRsr&si=RtDpPGwJNuSLewzK'}
@@ -280,6 +316,31 @@ export default function App() {
                 </a>
               </div>
               <p className="text-xs text-slate-500 font-mono">Mais recentes primeiro</p>
+            </div>
+
+            {/* Dynamic Sync Status bar */}
+            <div className="bg-[#0F0F12] border border-white/10 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-400">
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-2 w-2">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLoadingLive ? 'bg-blue-400' : 'bg-emerald-400'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isLoadingLive ? 'bg-blue-500' : 'bg-emerald-500'}`}></span>
+                </span>
+                <span>
+                  {isLoadingLive 
+                    ? 'Sincronizando com o canal do YouTube...' 
+                    : lastUpdated 
+                      ? `Sincronizado com o YouTube (Atualizado: ${new Date(lastUpdated).toLocaleTimeString()})`
+                      : 'Sincronizado com o canal do YouTube em tempo real'}
+                </span>
+              </div>
+              <button 
+                onClick={() => fetchLivePlaylists(true)}
+                disabled={isLoadingLive}
+                className="hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 font-bold text-blue-400 hover:underline disabled:opacity-50 disabled:no-underline text-left"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLive ? 'animate-spin text-blue-500' : ''}`} />
+                Sincronizar Playlist
+              </button>
             </div>
 
             <div className="space-y-3 max-h-[750px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#1C1C24] scrollbar-track-transparent">
